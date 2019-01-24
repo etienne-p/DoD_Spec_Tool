@@ -1,6 +1,6 @@
 # in the yaml file we describe DoD concepts
 
-Labe: "DoD Design - DataFlow"
+Label: "DoD Design - DataFlow"
 
 # list available components, lets us detect typos
 Components:

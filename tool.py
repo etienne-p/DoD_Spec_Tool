@@ -1,5 +1,6 @@
 import sys
 import yaml
+import itertools
 
 class System:
     def __init__(self, name):
@@ -25,32 +26,41 @@ def compute_edges(systems):
     """
     return [(dep, s.name) for s in systems for dep in s.dependencies]
 
+
+
 def compile_dot(context, inputs, systems):
     """
     builds a graph based on system dependencies
     """
     edges = compute_edges(systems)
 
-    edges_decl = ["%s -- %s" % e for e in edges]
+    edges_decl = "\n".join(["%s -- %s" % e for e in edges])
 
     input_decl_prefix = "node [shape=ellipse, style=\"\"];"
     input_names = [" %s;" % i for i in inputs]
-    input_decl = input_decl_prefix + input_names
+    input_decl = input_decl_prefix + "".join(input_names)
 
     sys_decl_prefix = "node [shape=box, style=\"filled\", fillcolor=\"#dddddd\"];"
     sys_names = [" %s;" % s.name for s in systems]
-    sys_decl = sys_decl_prefix + sys_names
+    sys_decl = sys_decl_prefix  + "".join(sys_names)
 
-    #TODO comp node: comp that are not produced by a depended on system are fetched form world
+    #TODO comp node: comp that are not produced by a depended on system are fetched from world
 
-    node_decl = "\n".join([input_decl, sys_decl, comp_decl])
+    comp_decl_prefix = "node [shape=record, style=\"\"];"
+    
+    def record_decl(id, comps):
+        fields = "| ".join(["<f%s>%s" % (i, c) for i, c in enumerate(comps)])
+        return "    %s[label=\"%s\"]" % (id, fields)
+    # component sets depend on systems IO
+    comp_sets = [record_decl(*r) for r in list(itertools.chain( \
+        *[(("%s_out" % s.name, s.inputs), ("%s_out" % s.name, s.outputs)) for s in systems]))]
+    comp_decl = "\n".join([comp_decl_prefix, "\n".join(comp_sets)])
 
     dot = "\n".join([
         "graph ER {",
         "rankdir = \"LR\"",
-        "\n".join(node_decl),
-        "\n".join(edges_decl),
-        "label = \"\n\n%s\";" % context.name
+        input_decl, sys_decl, comp_decl, edges_decl,
+        "label = \"\\n\\n%s\";" % context.name,
         "fontsize=20;",
         "}"])
     return dot
