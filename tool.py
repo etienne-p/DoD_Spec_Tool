@@ -14,19 +14,44 @@ class Context:
         self.name = name
         self.components = components # a list of supported components, mostly to catch up typos in the yaml file
 
-def graph_to_dot(graph):
+def compute_ancestor_data_dependency(system):
     """
-    generates a .dot (graphviz) representation of the graph
+    provides a list of components recursively provided by dependencies
     """
-    pass
+    def compute_data_dependency_rec(data, system):
+        for d in system.dependencies:
+            for c in d.outputs:
+                if c not in data:
+                    data[c] = system.name
+            compute_data_dependency_rec(data, d)
+
+    data = dict()
+    compute_data_dependency_rec(data, system)
+    return data
 
 def compute_edges(systems):
     """
     compute edges based on system dependencies
+    components are either provided by dependencies or, by default, World
+    returns a list of edges and a list of "filter" nodes
     """
-    return [(dep, s.name) for s in systems for dep in s.dependencies]
+    edges = []
+    # each system introduces its input edges
+    for s in systems:
+        # always one edge representing node input
+        name_in = "%s_in" % s.name # implicit node
+        edges.append("%s -- %s" % (name_in, s.name))
+        # one edge per dependency
+        for d in s.dependencies:
+            edges.append("%s -- %s" % (d.name, name_in))
+        # ancestor dependencies
+        ancestor_dependencies = compute_ancestor_data_dependency(s)
+        # based on those dependencies, add edges to ancestor systems
+        for i in s.inputs:
+            if i in ancestor_dependencies:
+                edges.append("%s -- %s" % (ancestor_dependencies[i], name_in))
 
-
+    return edges
 
 def compile_dot(context, inputs, systems):
     """
@@ -34,7 +59,7 @@ def compile_dot(context, inputs, systems):
     """
     edges = compute_edges(systems)
 
-    edges_decl = "\n".join(["%s -- %s" % e for e in edges])
+    edges_decl = "\n".join(edges)
 
     input_decl_prefix = "node [shape=ellipse, style=\"\"];"
     input_names = [" %s;" % i for i in inputs]
@@ -44,8 +69,6 @@ def compile_dot(context, inputs, systems):
     sys_names = [" %s;" % s.name for s in systems]
     sys_decl = sys_decl_prefix  + "".join(sys_names)
 
-    #TODO comp node: comp that are not produced by a depended on system are fetched from world
-
     comp_decl_prefix = "node [shape=record, style=\"\"];"
     
     def record_decl(id, comps):
@@ -53,7 +76,7 @@ def compile_dot(context, inputs, systems):
         return "    %s[label=\"%s\"]" % (id, fields)
     # component sets depend on systems IO
     comp_sets = [record_decl(*r) for r in list(itertools.chain( \
-        *[(("%s_out" % s.name, s.inputs), ("%s_out" % s.name, s.outputs)) for s in systems]))]
+        *[(("%s_in" % s.name, s.inputs), ("%s_out" % s.name, s.outputs)) for s in systems]))]
     comp_decl = "\n".join([comp_decl_prefix, "\n".join(comp_sets)])
 
     dot = "\n".join([
@@ -65,7 +88,6 @@ def compile_dot(context, inputs, systems):
         "}"])
     return dot
 
-
 def parse_system(context, data):
     s = System(data["name"])
     for i in data["in"]:
@@ -74,15 +96,22 @@ def parse_system(context, data):
     for i in data["out"]:
         assert(i in context.components), "Unexpected component %s" % i
         s.outputs.append(i)
-    # TODO if systems are not ordered we have to defer error checking
-    for i in data["depend_on"]:
-        s.dependencies.append(i)
     return s
 
 def parse_yaml_data(data):
     context = Context(data["Label"] if "Label" in data else "DataFlow", data["Components"])
     inputs = data["Inputs"]
-    systems = [parse_system(context, s) for s in data["Systems"]]
+    if not "World" in inputs:
+        inputs.append("World")
+    systems_dep = [(parse_system(context, s), s["depend_on"] if "depend_on" in s else []) for s in data["Systems"]]
+    # having instanciated systems, assign dependencies
+    systems_dict = dict((s[0].name, s[0]) for s in systems_dep)
+    systems = []
+    for r in systems_dep:
+        s = r[0]
+        for d in r[1]:
+            s.dependencies.append(systems_dict[d])
+        systems.append(s)
     return context, inputs, systems
 
 def parse_yaml(path):
@@ -109,6 +138,5 @@ if __name__ == "__main__":
         print("expected 2 or more command line arguments, aborted.")
         exit()
     path = sys.argv[1]
-    # TODO regex based check?
     yaml_to_graph(path)
 

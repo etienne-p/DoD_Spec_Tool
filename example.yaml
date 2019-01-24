@@ -12,7 +12,16 @@ Inputs:
   - "empty"
 
 # a system is described in terms of inputs and outputs
+
 Systems:
+  -
+    name: "MyOtherSystem"
+    in:
+      - "Layout"
+      - "Transform"
+    out:
+      - "Transform"
+
   -
     name: "MyUpdater"
     depend_on: 
