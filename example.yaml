@@ -1,0 +1,28 @@
+# in the yaml file we describe DoD concepts
+
+Labe: "DoD Design - DataFlow"
+
+# list available components, lets us detect typos
+Components:
+  - "Layout"
+  - "Transform"
+  - "Text"
+
+Inputs:
+  - "empty"
+
+# a system is described in terms of inputs and outputs
+Systems:
+  -
+    name: "MyUpdater"
+    depend_on: 
+      - "MyOtherSystem" # let's us build the computational graph based on dependencies
+    in:
+      - "Layout"
+      - "Transform"
+    out:
+      - "Transform"
+
+
+
+
