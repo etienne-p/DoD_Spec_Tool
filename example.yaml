@@ -8,6 +8,7 @@ Components:
   - "Transform"
   - "Text"
   - "Mesh"
+  - "Hierarchy"
 
 Inputs:
   - "MousePosition"
@@ -29,15 +30,17 @@ Systems:
     in:
       - "Keyboard"
       - "Text"
+      - "Hierarchy"
     out:
       - "Text"
 
   -
     name: "System2"
-    depend_on: 
+    depend_on:
       - "System0" # let's us build the computational graph based on dependencies
       - "System1" # let's us build the computational graph based on dependencies
     in:
+      - "MousePosition" 
       - "Transform"
       - "Text"
     out:

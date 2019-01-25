@@ -35,13 +35,14 @@ def compute_ancestor_data_dependency(system):
         compute_data_dependency_rec(data, s)
     return data
 
-def compute_edges(systems):
+def compute_edges(context, systems):
     """
     compute edges based on system dependencies
     components are either provided by dependencies or, by default, World
     returns a list of edges and a list of "filter" nodes
     """
     edges = []
+    used_components = []
     # each system introduces its input edges
     for s in systems:
         # always one edge representing node input
@@ -53,9 +54,17 @@ def compute_edges(systems):
         # ancestor dependencies
         ancestor_dependencies = compute_ancestor_data_dependency(s)
         # based on those dependencies, add edges to ancestor systems
+        world_connected = False
         for i in s.inputs:
             if i in ancestor_dependencies:
                 edges.append("%s -- %s" % (ancestor_dependencies[i], name_in))
+            elif i in context.inputs:
+                edges.append("%s -- %s" % (i, name_in))
+            elif not world_connected:
+                # anything that does not come from input or dependencies
+                # is assumed to come from World
+                world_connected = True
+                edges.append("%s -- %s" % ("World", name_in))
 
     return edges
 
@@ -63,7 +72,7 @@ def compile_dot(context, systems):
     """
     builds a graph based on system dependencies
     """
-    edges = compute_edges(systems)
+    edges = compute_edges(context, systems)
 
     edges_decl = "\n".join(edges)
 
@@ -81,8 +90,8 @@ def compile_dot(context, systems):
         fields = "| ".join(["<f%s>%s" % (i, c) for i, c in enumerate(comps)])
         return "    %s[label=\"%s\"]" % (id, fields)
     # component sets depend on systems IO
-    comp_sets = [record_decl(*r) for r in list(itertools.chain( \
-        *[(("%s_in" % s.name, s.inputs), ("%s_out" % s.name, s.outputs)) for s in systems]))]
+    comp_sets = [record_decl(*r) for r in \
+        [("%s_in" % s.name, s.inputs) for s in systems]]
     comp_decl = "\n".join([comp_decl_prefix, "\n".join(comp_sets)])
 
     dot = "\n".join([
@@ -114,6 +123,7 @@ def parse_yaml_data(data):
     # having instanciated systems, assign dependencies
     systems_dict = dict((s[0].name, s[0]) for s in systems_dep)
     systems = []
+    # detect typo in system names
     for r in systems_dep:
         s = r[0]
         for d in r[1]:
