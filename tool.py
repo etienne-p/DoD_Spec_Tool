@@ -83,9 +83,9 @@ def make_graph(context, systems):
     compute_edges(context, systems, graph)
 
     for i in context.inputs:
-        graph.node(i, shape='box', style='filled', fillcolor='#d8d8d8', fontname=font)
+        graph.node(i, shape='cds', style='filled', fillcolor='#d8d8d8', fontname=font)
     for s in systems:
-        graph.node(s.name, shape='box', style='filled', fillcolor='#bad4ff', fontname=font)
+        graph.node(s.name, shape='box3d', style='filled', fillcolor='#bad4ff', fontname=font)
 
     def record_decl(comps):
         return "| ".join(["<f%s>%s" % (i, c) for i, c in enumerate(comps)])
