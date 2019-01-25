@@ -2,6 +2,7 @@ import sys
 import yaml
 import itertools
 import subprocess
+from graphviz import Digraph
 
 class System:
     def __init__(self, name):
@@ -35,7 +36,7 @@ def compute_ancestor_data_dependency(system):
         compute_data_dependency_rec(data, s)
     return data
 
-def compute_edges(context, systems):
+def compute_edges(context, systems, graph):
     """
     compute edges based on system dependencies
     components are either provided by dependencies or, by default, World
@@ -47,61 +48,51 @@ def compute_edges(context, systems):
     for s in systems:
         # always one edge representing node input
         name_in = "%s_in" % s.name # implicit node
-        edges.append("%s -- %s" % (name_in, s.name))
+        graph.edge(name_in, s.name)
         # one edge per dependency
         for d in s.dependencies:
-            edges.append("%s -- %s" % (d.name, name_in))
+            graph.edge(d.name, name_in)
         # ancestor dependencies
         ancestor_dependencies = compute_ancestor_data_dependency(s)
         # based on those dependencies, add edges to ancestor systems
         world_connected = False
         for i in s.inputs:
             if i in ancestor_dependencies:
-                edges.append("%s -- %s" % (ancestor_dependencies[i], name_in))
+                graph.edge(ancestor_dependencies[i], name_in)
             elif i in context.inputs:
-                edges.append("%s -- %s" % (i, name_in))
+                graph.edge(i, name_in)
             elif not world_connected:
                 # anything that does not come from input or dependencies
                 # is assumed to come from World
                 world_connected = True
-                edges.append("%s -- %s" % ("World", name_in))
+                graph.edge("World", name_in)
 
     return edges
 
-def compile_dot(context, systems):
+def make_graph(context, systems):
     """
     builds a graph based on system dependencies
     """
-    edges = compute_edges(context, systems)
+    graph = Digraph(context.name, filename='%s.gv' % context.name)
+    graph.attr(rankdir='LR', fontsize='20')
 
-    edges_decl = "\n".join(edges)
+    compute_edges(context, systems, graph)
 
-    input_decl_prefix = "node [shape=ellipse, style=\"\"];"
-    input_names = [" %s;" % i for i in context.inputs]
-    input_decl = input_decl_prefix + "".join(input_names)
-
-    sys_decl_prefix = "node [shape=box, style=\"filled\", fillcolor=\"#dddddd\"];"
-    sys_names = [" %s;" % s.name for s in systems]
-    sys_decl = sys_decl_prefix  + "".join(sys_names)
+    for i in context.inputs:
+        graph.node(i, shape='ellipse', style='')
+    for s in systems:
+        graph.node(s.name, shape='box', style='filled', fillcolor='#dddddd')
 
     comp_decl_prefix = "node [shape=record, style=\"\"];"
     
-    def record_decl(id, comps):
-        fields = "| ".join(["<f%s>%s" % (i, c) for i, c in enumerate(comps)])
-        return "    %s[label=\"%s\"]" % (id, fields)
-    # component sets depend on systems IO
-    comp_sets = [record_decl(*r) for r in \
-        [("%s_in" % s.name, s.inputs) for s in systems]]
-    comp_decl = "\n".join([comp_decl_prefix, "\n".join(comp_sets)])
+    def record_decl(comps):
+        return "| ".join(["<f%s>%s" % (i, c) for i, c in enumerate(comps)])
 
-    dot = "\n".join([
-        "graph ER {",
-        "rankdir = \"LR\"",
-        input_decl, sys_decl, comp_decl, edges_decl,
-        "label = \"\\n\\n%s\";" % context.name,
-        "fontsize=20;",
-        "}"])
-    return dot
+    # component sets depend on systems IO
+    for r in [("%s_in" % s.name, s.inputs) for s in systems]:
+        graph.node(r[0], record_decl(r[1]), shape='record')
+
+    return graph
 
 def parse_system(context, data):
     s = System(data["name"])
@@ -146,11 +137,11 @@ def parse_yaml(path):
 # turns DoD concepts described in yaml file to a visual representation
 def yaml_to_graph(path):
     context, systems = parse_yaml(path)
-    dot_src = compile_dot(context, systems)
-    print(dot_src)
+    graph = make_graph(context, systems)
+    print(graph.source)
     dot_filename = "%s.dot" % context.name
     with open(dot_filename, 'w') as dot_file:
-        dot_file.write(dot_src)
+        dot_file.write(graph.source)
     subprocess.run(["dot", "-Tpng", dot_filename, "-o", "%s.png" % context.name])
 
 if __name__ == "__main__":
