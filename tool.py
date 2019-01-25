@@ -48,17 +48,18 @@ def compute_edges(context, systems, graph):
     for s in systems:
         # always one edge representing node input
         name_in = "%s_in" % s.name # implicit node
+        name_out = "%s_out" % s.name
         graph.edge(name_in, s.name)
         # one edge per dependency
         for d in s.dependencies:
-            graph.edge(d.name, name_in)
+            graph.edge("%s_out" % d.name, name_in)
         # ancestor dependencies
         ancestor_dependencies = compute_ancestor_data_dependency(s)
         # based on those dependencies, add edges to ancestor systems
         world_connected = False
         for i in s.inputs:
             if i in ancestor_dependencies:
-                graph.edge(ancestor_dependencies[i], name_in)
+                graph.edge("%s_out" % ancestor_dependencies[i], name_in)
             elif i in context.inputs:
                 graph.edge(i, name_in)
             elif not world_connected:
@@ -66,6 +67,8 @@ def compute_edges(context, systems, graph):
                 # is assumed to come from World
                 world_connected = True
                 graph.edge("World", name_in)
+        for o in s.outputs:
+            graph.edge(s.name, name_out)
 
     return edges
 
@@ -73,24 +76,23 @@ def make_graph(context, systems):
     """
     builds a graph based on system dependencies
     """
+    font = 'courier'
     graph = Digraph(context.name, filename='%s.gv' % context.name)
-    graph.attr(rankdir='LR', fontsize='20')
+    graph.attr(rankdir='LR', fontsize='20', label="\n\n"+context.name)
 
     compute_edges(context, systems, graph)
 
     for i in context.inputs:
-        graph.node(i, shape='ellipse', style='')
+        graph.node(i, shape='box', style='filled', fillcolor='#d8d8d8', fontname=font)
     for s in systems:
-        graph.node(s.name, shape='box', style='filled', fillcolor='#dddddd')
+        graph.node(s.name, shape='box', style='filled', fillcolor='#bad4ff', fontname=font)
 
-    comp_decl_prefix = "node [shape=record, style=\"\"];"
-    
     def record_decl(comps):
         return "| ".join(["<f%s>%s" % (i, c) for i, c in enumerate(comps)])
 
     # component sets depend on systems IO
-    for r in [("%s_in" % s.name, s.inputs) for s in systems]:
-        graph.node(r[0], record_decl(r[1]), shape='record')
+    for r in [("%s_in" % s.name, s.inputs) for s in systems] + [("%s_out" % s.name, s.outputs) for s in systems]:
+        graph.node(r[0], record_decl(r[1]), shape='record', fontsize='10', fontname=font)
 
     return graph
 
