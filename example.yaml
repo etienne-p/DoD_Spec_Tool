@@ -7,15 +7,17 @@ Components:
   - "Layout"
   - "Transform"
   - "Text"
+  - "Mesh"
 
 Inputs:
-  - "empty"
+  - "MousePosition"
+  - "Keyboard"
 
 # a system is described in terms of inputs and outputs
 
 Systems:
   -
-    name: "MyOtherSystem"
+    name: "System0"
     in:
       - "Layout"
       - "Transform"
@@ -23,14 +25,23 @@ Systems:
       - "Transform"
 
   -
-    name: "MyUpdater"
-    depend_on: 
-      - "MyOtherSystem" # let's us build the computational graph based on dependencies
+    name: "System1"
     in:
-      - "Layout"
-      - "Transform"
+      - "Keyboard"
+      - "Text"
     out:
+      - "Text"
+
+  -
+    name: "System2"
+    depend_on: 
+      - "System0" # let's us build the computational graph based on dependencies
+      - "System1" # let's us build the computational graph based on dependencies
+    in:
       - "Transform"
+      - "Text"
+    out:
+      - "Mesh"
 
 
 

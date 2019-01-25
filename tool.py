@@ -11,9 +11,12 @@ class System:
         self.outputs = [] # a list of components the system mutates/generates
 
 class Context:
-    def __init__(self, name, components):
+    def __init__(self, name, inputs, components, ):
         self.name = name
+        self.inputs = inputs
         self.components = components # a list of supported components, mostly to catch up typos in the yaml file
+    def valid_source(self, src):
+        return src in self.inputs or src in self.components
 
 def compute_ancestor_data_dependency(system):
     """
@@ -23,11 +26,13 @@ def compute_ancestor_data_dependency(system):
         for d in system.dependencies:
             for c in d.outputs:
                 if c not in data:
-                    data[c] = system.name
+                    data[c] = d.name
             compute_data_dependency_rec(data, d)
 
     data = dict()
-    compute_data_dependency_rec(data, system)
+    # skip direct ancestors, already connected
+    for s in system.dependencies:
+        compute_data_dependency_rec(data, s)
     return data
 
 def compute_edges(systems):
@@ -54,7 +59,7 @@ def compute_edges(systems):
 
     return edges
 
-def compile_dot(context, inputs, systems):
+def compile_dot(context, systems):
     """
     builds a graph based on system dependencies
     """
@@ -63,7 +68,7 @@ def compile_dot(context, inputs, systems):
     edges_decl = "\n".join(edges)
 
     input_decl_prefix = "node [shape=ellipse, style=\"\"];"
-    input_names = [" %s;" % i for i in inputs]
+    input_names = [" %s;" % i for i in context.inputs]
     input_decl = input_decl_prefix + "".join(input_names)
 
     sys_decl_prefix = "node [shape=box, style=\"filled\", fillcolor=\"#dddddd\"];"
@@ -92,18 +97,19 @@ def compile_dot(context, inputs, systems):
 def parse_system(context, data):
     s = System(data["name"])
     for i in data["in"]:
-        assert(i in context.components), "Unexpected component %s" % i
+        assert(context.valid_source(i)), "Unexpected source %s" % i
         s.inputs.append(i)
     for i in data["out"]:
-        assert(i in context.components), "Unexpected component %s" % i
+        assert(context.valid_source(i)), "Unexpected source %s" % i
         s.outputs.append(i)
     return s
 
 def parse_yaml_data(data):
-    context = Context(data["Label"] if "Label" in data else "DataFlow", data["Components"])
-    inputs = data["Inputs"]
+    inputs = data["Inputs"] if "Inputs" in data else []
     if not "World" in inputs:
         inputs.append("World")
+    label = data["Label"] if "Label" in data else "DataFlow"
+    context = Context(label, inputs, data["Components"])
     systems_dep = [(parse_system(context, s), s["depend_on"] if "depend_on" in s else []) for s in data["Systems"]]
     # having instanciated systems, assign dependencies
     systems_dict = dict((s[0].name, s[0]) for s in systems_dep)
@@ -113,11 +119,11 @@ def parse_yaml_data(data):
         for d in r[1]:
             s.dependencies.append(systems_dict[d])
         systems.append(s)
-    return context, inputs, systems
+    return context, systems
 
 def parse_yaml(path):
     """
-    parses the yaml file and returns a collection of inputs and systems
+    parses the yaml file and returns a context and a collection of inputs and systems
     """
     with open(path, 'r') as stream:
         try:
@@ -129,11 +135,11 @@ def parse_yaml(path):
 
 # turns DoD concepts described in yaml file to a visual representation
 def yaml_to_graph(path):
-    context, inputs, systems = parse_yaml(path)
-    dot_src = compile_dot(context, inputs, systems)
+    context, systems = parse_yaml(path)
+    dot_src = compile_dot(context, systems)
     print(dot_src)
     dot_filename = "%s.dot" % context.name
-    with open(dot_filename, 'a') as dot_file:
+    with open(dot_filename, 'w') as dot_file:
         dot_file.write(dot_src)
     subprocess.run(["dot", "-Tpng", dot_filename, "-o", "%s.png" % context.name])
 
