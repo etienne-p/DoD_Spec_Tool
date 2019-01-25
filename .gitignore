@@ -5,6 +5,7 @@
 *.png
 *.svg
 *.jpg
+*.dot
 
 # PYTHON STUFF
 

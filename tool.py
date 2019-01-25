@@ -1,6 +1,7 @@
 import sys
 import yaml
 import itertools
+import subprocess
 
 class System:
     def __init__(self, name):
@@ -129,9 +130,12 @@ def parse_yaml(path):
 # turns DoD concepts described in yaml file to a visual representation
 def yaml_to_graph(path):
     context, inputs, systems = parse_yaml(path)
-    dot = compile_dot(context, inputs, systems)
-    print(dot)
-    # TODO render with graphviz
+    dot_src = compile_dot(context, inputs, systems)
+    print(dot_src)
+    dot_filename = "%s.dot" % context.name
+    with open(dot_filename, 'a') as dot_file:
+        dot_file.write(dot_src)
+    subprocess.run(["dot", "-Tpng", dot_filename, "-o", "%s.png" % context.name])
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
